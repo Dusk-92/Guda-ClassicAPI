@@ -22,6 +22,8 @@ local QUIET_DELAY = 0.5  -- seconds of silence after a *_CLOSED event before aut
 local running = false
 local silentRun = false
 local pendingToken = 0   -- bumped on every auto-trigger and on LOOT_OPENED to cancel stale timers
+local waitingForLoot = false
+local OpenNext  -- forward declaration; defined after OnClamLootClosed
 
 -- Returns true if any blocking window (loot/mail/trade/merchant/bank/auction)
 -- is currently open. We don't want to UseContainerItem while these are active --
@@ -65,22 +67,33 @@ end
 local function StopRun(reason)
     if not running then return end
     running = false
-    -- Only drop the per-run UI_ERROR_MESSAGE listener; the persistent auto-
-    -- trigger events stay registered.
     addon.Modules.Events:UnregisterOwner("ClamOpener_Run")
+    addon.Modules.Events:UnregisterOwner("ClamOpener_LootWait")
+    waitingForLoot = false
     if reason and not silentRun then
         addon:Print(reason)
     end
     silentRun = false
 end
 
-local function OpenNext()
+-- waitingForLoot: set between UseContainerItem and the LOOT_CLOSED that confirms
+-- the clam loot window has fully closed, preventing any concurrent UseContainerItem.
+local function OnClamLootClosed()
+    -- Unregister this one-shot listener immediately.
+    addon.Modules.Events:UnregisterOwner("ClamOpener_LootWait")
+    waitingForLoot = false
     if not running then return end
+    -- Small delay to let the client fully settle before the next open.
+    Guda_ScheduleTimer(OPEN_DELAY, OpenNext)
+end
+
+OpenNext = function()
+    if not running then return end
+    if waitingForLoot then return end
 
     -- Never use a clam while something else is in-flight: cursor busy,
     -- a blocking window open, or a server-side loot still active. Any of
-    -- these + UseContainerItem races the client loot state machine and
-    -- can soft-lock the loot UI ("too far away" greyed-out items).
+    -- these + UseContainerItem races the open window or get queued and lost.
     if CursorHasItem()
        or IsBlockingWindowOpen()
        or (GetNumLootItems and GetNumLootItems() > 0) then
@@ -94,8 +107,11 @@ local function OpenNext()
         return
     end
 
+    -- Arm the one-shot LOOT_CLOSED listener before calling UseContainerItem
+    -- so we cannot miss the event even if it fires in the same frame.
+    waitingForLoot = true
+    addon.Modules.Events:Register("LOOT_CLOSED", OnClamLootClosed, "ClamOpener_LootWait")
     UseContainerItem(bagID, slotID)
-    Guda_ScheduleTimer(OPEN_DELAY, OpenNext)
 end
 
 -- Stop on UI_ERROR_MESSAGE (e.g. inventory full). UseContainerItem fires this
