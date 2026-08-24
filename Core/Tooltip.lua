@@ -483,15 +483,14 @@ function Tooltip:Initialize()
  	local oldSetHyperlink = GameTooltip.SetHyperlink
 	function GameTooltip:SetHyperlink(link)
 		return WithDeferredMoney(self, function()
+			-- The native Blizzard SetHyperlink only accepts a bare "item:ID:e:e:e" string.
+			-- Any addon that captured the native before Guda loaded (e.g. AtlasLoot) will
+			-- call it directly with whatever we pass here, so we MUST strip the color codes
+			-- and |H...|h wrapper before forwarding. Passing the full colored link causes
+			-- "unknown link type" in those addons.
 			local _, _, inner = string.find(link or "", "|H(.+)|h")
-			local forwarded = link
-			local itemLinkForCounts = link
-			if inner then
-				forwarded = inner
-				if strfind(inner, "^item:") then
-					itemLinkForCounts = inner
-				end
-			end
+			local forwarded = inner or link
+			local itemLinkForCounts = inner or link
 			local ret = oldSetHyperlink(self, forwarded)
 			if itemLinkForCounts and strfind(itemLinkForCounts, "item:") then
 				Tooltip:AddInventoryInfo(self, itemLinkForCounts)

@@ -263,6 +263,19 @@ local function IsInCategoryView(isBank)
     return (addon.Modules.DB:GetSetting(key) or "single") == "category"
 end
 
+-- Set a tooltip from an item link, passing the BARE "item:ID:e:e:e" form rather
+-- than the full colored link. The 1.12 native GameTooltip:SetHyperlink only
+-- accepts the bare form; passing a full |cff..|Hitem:..|h[Name]|h|r link can
+-- reach a bare-only native further down a re-hooked SetHyperlink chain (e.g. when
+-- AtlasLoot / WoWTranslate / SuperCleverRoidMacros have re-hooked in an order that
+-- bypasses Guda's own stripping hook) and throw "unknown link type" in that addon.
+-- Always route Guda-originated SetHyperlink calls through this helper.
+local function GudaSetTooltipHyperlink(tooltip, link)
+    if not link then return end
+    local _, _, bare = string.find(link, "|H(item:[^|]+)|h")
+    tooltip:SetHyperlink(bare or link)
+end
+
 -- Auto-clear cursor tracking when cursor is truly empty, and notify BagFrame
 -- of drag-state transitions. In 1.12 CURSOR_UPDATE is unreliable for item
 -- pickups, so we also poll CursorHasItem() on a throttled OnUpdate —
@@ -2449,7 +2462,7 @@ function Guda_ItemButton_OnEnter(self)
             -- Read-only / other character mailbox OR current character mailbox when closed
             GameTooltip.GudaViewedCharacter = self.otherChar or currentPlayerName
             if self.itemData.link then
-                GameTooltip:SetHyperlink(self.itemData.link)
+                GudaSetTooltipHyperlink(GameTooltip, self.itemData.link)
             else
                 GameTooltip:SetHyperlink("item:" .. self.itemData.itemID .. ":0:0:0")
             end
@@ -2504,7 +2517,7 @@ function Guda_ItemButton_OnEnter(self)
 	elseif self.otherChar or self.isReadOnly then
 		GameTooltip.GudaViewedCharacter = self.otherChar
 		if self.itemData and self.itemData.link then
-			local ok = pcall(GameTooltip.SetHyperlink, GameTooltip, self.itemData.link)
+			local ok = pcall(GudaSetTooltipHyperlink, GameTooltip, self.itemData.link)
 			if not ok then
 				GameTooltip:Hide()
 				return
@@ -2521,13 +2534,20 @@ function Guda_ItemButton_OnEnter(self)
 			GameTooltip:SetBagItem(self.bagID, self.slotID)
 		elseif self.itemData and self.itemData.link then
 			-- Bank is closed - use cached link
-			GameTooltip:SetHyperlink(self.itemData.link)
+			GudaSetTooltipHyperlink(GameTooltip, self.itemData.link)
 		end
 	elseif self.bagID == -2 then
-		-- Keyring: SetBagItem might be unreliable for -2 in some 1.12.1 environments, fallback to hyperlink if needed
+		-- Keyring (bag -2): in 1.12 the native SetBagItem builds the keyring tooltip
+		-- by internally calling SetHyperlink with the FULL colored link
+		-- (|cff..|Hitem:..|h[Name]|h|r). When other addons (AtlasLoot, WoWTranslate)
+		-- have re-hooked SetHyperlink in an order that bypasses Guda's stripping, that
+		-- full link reaches a hook whose captured original is the raw Blizzard
+		-- SetHyperlink — which only accepts the BARE "item:ID:0:0:0" form and otherwise
+		-- throws "unknown link type". We avoid that internal path entirely by calling
+		-- SetHyperlink ourselves with the bare form (GudaSetTooltipHyperlink extracts it).
 		local link = GetContainerItemLink(self.bagID, self.slotID)
 		if link then
-			GameTooltip:SetHyperlink(link)
+			GudaSetTooltipHyperlink(GameTooltip, link)
 		else
 			GameTooltip:SetBagItem(self.bagID, self.slotID)
 		end
