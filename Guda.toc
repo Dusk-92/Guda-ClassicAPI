@@ -21,6 +21,7 @@ Core\Utils.lua
 Core\ClassicAPI.lua
 Core\Performance.lua
 Core\ItemDetection.lua
+Core\ItemDetectionClassicAPI.lua
 Core\CategoryManager.lua
 Core\Tooltip.lua
 Core\InventoryIndex.lua
