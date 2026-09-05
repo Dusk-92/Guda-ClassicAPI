@@ -45,7 +45,9 @@ UI\BagFrame.lua
 UI\BankFrame.lua
 UI\MailboxFrame.lua
 UI\QuestItemBar.lua
+UI\QuestItemBarClassicAPI.lua
 UI\TrackedItemBar.lua
+UI\TrackedItemBarClassicAPI.lua
 UI\SettingsPopup.lua
 UI\ItemButton.xml
 UI\BagFrame.xml
