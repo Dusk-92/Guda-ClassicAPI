@@ -23,15 +23,18 @@ Core\Performance.lua
 Core\ItemDetection.lua
 Core\ItemDetectionClassicAPI.lua
 Core\ItemChargesClassicAPI.lua
+Core\ItemDetectionCacheSafety.lua
 Core\CategoryManager.lua
 Core\Tooltip.lua
 Core\InventoryIndex.lua
+Core\InventoryIndexSafety.lua
 Core\ClamOpener.lua
 Core\AutoLoot.lua
 Core\CacheWarmer.lua
 
 Data\BagScanner.lua
 Data\BankScanner.lua
+Data\CacheLifecycleSafety.lua
 Data\MailboxScanner.lua
 Data\MoneyTracker.lua
 Data\EquipmentScanner.lua
