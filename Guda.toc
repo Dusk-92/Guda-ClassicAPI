@@ -23,6 +23,7 @@ Core\Performance.lua
 Core\ItemDetection.lua
 Core\CategoryManager.lua
 Core\Tooltip.lua
+Core\InventoryIndex.lua
 Core\ClamOpener.lua
 Core\AutoLoot.lua
 Core\CacheWarmer.lua
