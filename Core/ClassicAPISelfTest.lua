@@ -17,6 +17,11 @@ local function ExtractItemID(link)
     return id and tonumber(id) or nil
 end
 
+local function IsKnownQuality(value)
+    value = tonumber(value)
+    return value ~= nil and value >= 0
+end
+
 local function AddMismatch(state, text)
     state.mismatches = state.mismatches + 1
     if state.mismatches <= 12 then
@@ -69,14 +74,21 @@ local function CompareContainer(state, bagID, label)
                 end
 
                 -- ClassicAPI deliberately leaves cache-dependent fields nil
-                -- when static item data is cold, so compare only when both exist.
+                -- when static item data is cold. Vanilla 1.12 can also return
+                -- quality=-1 for an occupied slot while the item cache is not
+                -- authoritative yet. Treat nil/negative quality as unknown,
+                -- but still fail on any disagreement between two known values.
                 if texture and info.iconFileID and texture ~= info.iconFileID then
                     AddMismatch(state, format("%s %d:%d texture differs",
                         label, bagID, slotID))
                 end
-                if quality ~= nil and info.quality ~= nil and quality ~= info.quality then
-                    AddMismatch(state, format("%s %d:%d quality %s ~= %s",
-                        label, bagID, slotID, tostring(quality), tostring(info.quality)))
+                if IsKnownQuality(quality) and IsKnownQuality(info.quality) then
+                    if tonumber(quality) ~= tonumber(info.quality) then
+                        AddMismatch(state, format("%s %d:%d quality %s ~= %s",
+                            label, bagID, slotID, tostring(quality), tostring(info.quality)))
+                    end
+                elseif vanillaOccupied then
+                    state.qualityUnknown = state.qualityUnknown + 1
                 end
                 if readable ~= nil and info.isReadable ~= nil
                    and (readable and true or false) ~= (info.isReadable and true or false) then
@@ -110,7 +122,7 @@ function SelfTest:Run()
         return false
     end
 
-    local state = { checked = 0, mismatches = 0 }
+    local state = { checked = 0, mismatches = 0, qualityUnknown = 0 }
 
     for bagID = 0, 4 do
         CompareContainer(state, bagID, "bag")
@@ -150,6 +162,11 @@ function SelfTest:Run()
         addon:Print("ItemButton perf: watcher=%s polling=%s sharedGlows=%d active=%s",
             Bool(s.cursorWatcherFound), Bool(s.cursorPollingEnabled),
             s.sharedGlowDrivers or 0, Bool(s.sharedGlowActive))
+    end
+
+    if state.qualityUnknown > 0 then
+        addon:Print("Quality comparison skipped for %d slot(s) with uncached/unknown quality.",
+            state.qualityUnknown)
     end
 
     if state.mismatches == 0 then
