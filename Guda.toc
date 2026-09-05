@@ -25,6 +25,7 @@ Core\ItemDetectionClassicAPI.lua
 Core\ItemChargesClassicAPI.lua
 Core\ItemDetectionCacheSafety.lua
 Core\CategoryManager.lua
+Core\ManualJunkAutoSell.lua
 Core\Tooltip.lua
 Core\InventoryIndex.lua
 Core\InventoryIndexSafety.lua
