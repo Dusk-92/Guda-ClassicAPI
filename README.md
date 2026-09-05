@@ -1,8 +1,18 @@
-# Guda
+# Guda ClassicAPI
 
-A comprehensive **bag and bank management addon** for **World of Warcraft 1.12.1**, fully compatible with **Turtle WoW**.
+A comprehensive **bag and bank management addon** for **World of Warcraft 1.12.1 / Turtle WoW**, adapted and optimized for **ClassicAPI**.
 
-Guda provides a modern, unified bag/bank experience with multi-character support, sorting, item tracking, and quality-of-life tools.
+Guda ClassicAPI keeps the same familiar Guda experience with unified bags and bank, sorting, item tracking, multi-character support and quality-of-life tools, while aiming for smoother and lighter inventory updates.
+
+Based on the original **Guda** by **Vati**.
+
+---
+
+## ⚙️ Requirements
+
+- **World of Warcraft 1.12.1 / Turtle WoW**
+- **ClassicAPI** installed and loaded
+- Do not run the original Guda addon at the same time
 
 ---
 
@@ -35,7 +45,7 @@ Guda provides a modern, unified bag/bank experience with multi-character support
 
 - **Quest Item Display** – Shows usable quest items in up to 2 dedicated bars
 - **Quick Swap** – Hover over a quest item bar slot to see available quest items
-- **One-Click Replace** – Click on a popup item to swap it into the bar slot
+- **One-Click Replace** – Click a popup item to swap it into the bar slot
 - **Keybindable** – Set custom keybindings for quick quest item use
 - **Draggable** – Shift + Left-Click to drag the bar anywhere on screen
 
@@ -45,11 +55,8 @@ Guda provides a modern, unified bag/bank experience with multi-character support
 - **Money Tracking** – See total gold across all characters, grouped by account and realm
 - **Character Selector** – Switch characters quickly
 - **Faction Filtering** – Shows only characters from the same faction
-- **Global Item Counting** – Item totals across all characters, including:
-    - Bags
-    - Banks
-    - Equipped items
-    - Tooltip breakdown per character
+- **Global Item Counting** – Item totals across all characters, including bags, banks and equipped items
+- **Tooltip Breakdown** – See where your items are stored across characters
 - **Character Management** – Right-click the money frame to show/hide characters or remove deleted ones
 
 ### 💰 Money Display
@@ -62,21 +69,14 @@ Guda provides a modern, unified bag/bank experience with multi-character support
 
 Share character data (gold, bags, bank, mail, equipped items) between different WoW accounts on the same PC. Requires the companion [GudaIO](https://github.com/vatichild/GudaIO) DLL.
 
-**How it works:**
-- GudaIO runs once when the game starts, before the login screen appears
-- It reads each account's saved character data from `WTF/Account/*/SavedVariables/Guda.lua`
-- It merges them into a single file (`GudaShared.lua`) that the addon loads automatically
-- Characters from other accounts appear in the gold tooltip, inventory counts, and character dropdowns, separated by account
-- The DLL does nothing after startup — no hooks, no background threads, no memory patches
-
 **Setup:**
 1. Download `GudaIO.dll` from [GudaIO releases](https://github.com/vatichild/GudaIO/releases)
 2. Place it in your TurtleWoW folder (next to `WoW.exe`)
 3. Add `GudaIO.dll` on a new line in `dlls.txt`
 4. Log into each account at least once and log out properly
-5. Restart the game — all accounts will see each other's characters
+5. Restart the game
 
-Without the DLL, the addon works normally with single-account data only. No errors or crashes.
+Without GudaIO, the addon works normally with single-account data only.
 
 ---
 
@@ -108,9 +108,9 @@ Without the DLL, the addon works normally with single-account data only. No erro
 - **Sort Bags**: Press **Sort** or use `/guda sort`
 - **Sort Bank**: Use **Sort Bank** or `/guda sortbank`
 - Sorting modes:
-    - **Quality** (Epic → Rare → Uncommon → Common)
-    - **Name** (A → Z)
-    - **Type** (Item class & subclass)
+  - **Quality** (Epic → Rare → Uncommon → Common)
+  - **Name** (A → Z)
+  - **Type** (Item class & subclass)
 
 ### Category View
 
@@ -135,42 +135,13 @@ Without the DLL, the addon works normally with single-account data only. No erro
 5. Use **Shift + Left-Click** on the bar to drag it to your preferred location
 
 ![Quest Item Bar](https://i.imgur.com/orMsS06.png)
----
-
-## 🧠 Internal Systems
-
-### 🔍 Bag Scanner
-
-- Scans all bags at login
-- Updates when looting, moving, or modifying items
-- Stores item details (count, quality, name, link, etc.)
-
-### 🏦 Bank Scanner
-
-- Scans on bank open
-- Saves snapshot for offline viewing
-- Updates live while the bank is open
-
-### 💰 Money Tracker
-
-- Tracks money changes in real time
-- Displays per-character, current character, and total money
-
-### 🗄️ Data Storage
-
-| Variable | Description |
-|----------|-------------|
-| `Guda_DB` | Global data: bag & bank contents, character money, timestamps, tracked items |
-| `Guda_CharDB` | Per-character UI settings: bar positions, tracked item selections |
 
 ---
-
 
 ## ⚠️ Known Limitations
 
 | Area | Limitation |
 |------|------------|
-| Sorting | Advanced sorting requires handling bag restrictions (soul bags, profession bags). Locked and soulbound items need special handling. |
 | Bank Access | Must open the bank at least once to cache contents |
 | Faction Restriction | Only shows characters from the same faction |
 
@@ -178,9 +149,9 @@ Without the DLL, the addon works normally with single-account data only. No erro
 
 ## 🖼️ Screenshots
 
-| Guda Settings | Bag Single View                          | Bag Category View                  | Bank View                                    |
-|---------------|------------------------------------------|------------------------------------|----------------------------------------------|
-| ![Settings](https://github.com/user-attachments/assets/9ab1b985-1280-4c14-a733-3a1fffdaa7e4) | ![Bags](https://github.com/user-attachments/assets/1150de97-7db7-4267-b1cd-99c6267c4669) | ![Category](https://github.com/user-attachments/assets/825ada16-da49-400e-8b1b-4ae203786f0f) | ![Bank](https://github.com/user-attachments/assets/7a198526-85c8-4309-abeb-c2031645d828)     |
+| Guda Settings | Bag Single View | Bag Category View | Bank View |
+|---------------|-----------------|-------------------|-----------|
+| ![Settings](https://github.com/user-attachments/assets/9ab1b985-1280-4c14-a733-3a1fffdaa7e4) | ![Bags](https://github.com/user-attachments/assets/1150de97-7db7-4267-b1cd-99c6267c4669) | ![Category](https://github.com/user-attachments/assets/825ada16-da49-400e-8b1b-4ae203786f0f) | ![Bank](https://github.com/user-attachments/assets/7a198526-85c8-4309-8b1b-4ae203786f0f) |
 
 ---
 
@@ -205,4 +176,4 @@ WTF/Account/<ACCOUNT_NAME>/SavedVariables/Guda.lua.bak
 
 ## 📢 Support
 
-For bugs or feature requests, please open an issue. Your feedback helps improve the addon!
+For bugs or feature requests, please open an issue on this repository.
