@@ -275,12 +275,16 @@ end
 
 function BagScanner:InvalidateCache()
     cacheValid = false
+    eventPending = true
 end
 
+-- Existing BagFrame code calls InvalidateBag() frequently. Keep the public API
+-- but preserve the cached tables: mark only that bag dirty and refresh it in
+-- place on the next GetBagData(). Bag-size changes are detected automatically.
 function BagScanner:InvalidateBag(bagID)
-    if not bagCache or not bagCache[bagID] then return end
-    ReleaseBagCacheData(bagCache[bagID])
-    bagCache[bagID] = nil
+    if bagID == nil then return end
+    dirtyBags[bagID] = true
+    eventPending = true
 end
 
 function BagScanner:ScanBags()
