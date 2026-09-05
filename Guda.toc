@@ -47,6 +47,7 @@ Sorting\BagReplacer.lua
 # UI Lua must load before XML so OnLoad handlers exist
 UI\ItemButton.lua
 UI\ItemButtonPerformanceClassicAPI.lua
+UI\TooltipPositionFix.lua
 UI\FrameHelpers.lua
 UI\BagFrame.lua
 UI\BankFrame.lua
