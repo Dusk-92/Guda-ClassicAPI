@@ -59,6 +59,7 @@ UI\QuestItemBarClassicAPI.lua
 UI\QuestItemBarMoveSafety.lua
 UI\TrackedItemBar.lua
 UI\TrackedItemBarClassicAPI.lua
+UI\TrackedItemBarMoveSafety.lua
 UI\SettingsPopup.lua
 UI\ItemButton.xml
 UI\BagFrame.xml
