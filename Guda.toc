@@ -61,4 +61,5 @@ UI\BankFrame.xml
 UI\MailboxFrame.xml
 UI\SettingsPopup.xml
 
+Core\ClassicAPISelfTest.lua
 Core\Main.lua
