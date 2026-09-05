@@ -10,31 +10,31 @@ local OriginalSetItem = Guda_ItemButton_SetItem
 local function EnsureUnusableOverlay(button)
     if button.unusableOverlay then return button.unusableOverlay end
 
-    local icon = getglobal(button:GetName().."IconTexture") or getglobal(button:GetName().."Icon") or button.icon or button.Icon
-    local overlay = (icon and icon:GetParent() or button):CreateTexture(nil, "OVERLAY")
-    overlay:SetAllPoints(icon or button)
+    local overlay = button:CreateTexture(nil, "OVERLAY")
+    overlay:SetAllPoints(button)
     overlay:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
     overlay:Hide()
     button.unusableOverlay = overlay
     return overlay
 end
 
--- Keep the same color selection as ItemButton.lua, but use a stronger overlay
--- so unusable recipes/equipment remain clearly red after sorting and redraws.
+-- Mirror ItemButton.lua's unusable color selection exactly. The original helper
+-- is local to ItemButton.lua, so this safety layer cannot call it directly.
 local function GetUnusableColor()
     if pfUI and C and C.appearance and C.appearance.bags and C.appearance.bags.unusable_color then
-        local cr, cg, cb = strsplit(",", C.appearance.bags.unusable_color)
+        local cr, cg, cb, ca = strsplit(",", C.appearance.bags.unusable_color)
         local r = tonumber(cr) or 0.9
         local g = tonumber(cg) or 0.2
         local b = tonumber(cb) or 0.2
-        return r, g, b
+        local a = tonumber(ca) or 1.0
+        return r, g, b, a
     end
 
     if RED_FONT_COLOR then
-        return RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b
+        return RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b, 1.0
     end
 
-    return 0.9, 0.2, 0.2
+    return 0.9, 0.2, 0.2, 1.0
 end
 
 local function ApplyUnusableTint(button, unusable)
@@ -54,10 +54,10 @@ local function ApplyUnusableTint(button, unusable)
 
     overlay = EnsureUnusableOverlay(button)
 
-    local r, g, b = GetUnusableColor()
-    -- Deliberately stronger than Guda's original 45% overlay. At 70% the
-    -- unusable state stays obvious on bright recipe icons after restack/sort.
-    overlay:SetVertexColor(r or 0.9, g or 0.2, b or 0.2, 0.70)
+    local r, g, b, a = GetUnusableColor()
+    -- Match ItemButton.lua exactly: configured alpha is reduced once by 45%.
+    local alpha = (a or 1.0) * 0.45
+    overlay:SetVertexColor(r or 0.9, g or 0.2, b or 0.2, alpha)
     overlay:Show()
 end
 
