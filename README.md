@@ -151,7 +151,7 @@ Without GudaIO, the addon works normally with single-account data only.
 
 | Guda Settings | Bag Single View | Bag Category View | Bank View |
 |---------------|-----------------|-------------------|-----------|
-| ![Settings](https://github.com/user-attachments/assets/9ab1b985-1280-4c14-a733-3a1fffdaa7e4) | ![Bags](https://github.com/user-attachments/assets/1150de97-7db7-4267-b1cd-99c6267c4669) | ![Category](https://github.com/user-attachments/assets/825ada16-da49-400e-8b1b-4ae203786f0f) | ![Bank](https://github.com/user-attachments/assets/7a198526-85c8-4309-8b1b-4ae203786f0f) |
+| ![Settings](https://github.com/user-attachments/assets/9ab1b985-1280-4c14-a733-3a1fffdaa7e4) | ![Bags](https://github.com/user-attachments/assets/1150de97-7db7-4267-b1cd-99c6267c4669) | ![Category](https://github.com/user-attachments/assets/825ada16-da49-400e-8b1b-4ae203786f0f) | ![Bank](https://github.com/user-attachments/assets/7a198526-85c8-4309-abeb-c2031645d828) |
 
 ---
 
