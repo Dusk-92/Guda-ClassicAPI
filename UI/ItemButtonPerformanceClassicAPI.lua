@@ -13,7 +13,9 @@ local originalCursorOnEvent = nil
 local originalCursorOnUpdate = nil
 local cursorUpdateWrapper = nil
 local cursorEventWrapper = nil
-local cursorPollingEnabled = false
+-- ItemButton.lua creates the watcher with OnUpdate already active. Mirror that
+-- real initial state so the first idle RefreshCursorPolling() can disable it.
+local cursorPollingEnabled = true
 
 local glowDrivers = {}
 local glowDriverCount = 0
