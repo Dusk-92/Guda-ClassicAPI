@@ -18,6 +18,25 @@ local function EnsureUnusableOverlay(button)
     return overlay
 end
 
+-- Mirror ItemButton.lua's unusable color selection exactly. The original helper
+-- is local to ItemButton.lua, so this safety layer cannot call it directly.
+local function GetUnusableColor()
+    if pfUI and C and C.appearance and C.appearance.bags and C.appearance.bags.unusable_color then
+        local cr, cg, cb, ca = strsplit(",", C.appearance.bags.unusable_color)
+        local r = tonumber(cr) or 0.9
+        local g = tonumber(cg) or 0.2
+        local b = tonumber(cb) or 0.2
+        local a = tonumber(ca) or 1.0
+        return r, g, b, a
+    end
+
+    if RED_FONT_COLOR then
+        return RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b, 1.0
+    end
+
+    return 0.9, 0.2, 0.2, 1.0
+end
+
 local function ApplyUnusableTint(button, unusable)
     if not button then return end
 
@@ -35,16 +54,10 @@ local function ApplyUnusableTint(button, unusable)
 
     overlay = EnsureUnusableOverlay(button)
 
-    local r, g, b, a = 0.9, 0.2, 0.2, 0.45
-    if Guda_GetUnusableColor then
-        local cr, cg, cb, ca = Guda_GetUnusableColor()
-        r = cr or r
-        g = cg or g
-        b = cb or b
-        a = ca or a
-    end
-
-    overlay:SetVertexColor(r, g, b, (a or 1.0) * 0.45)
+    local r, g, b, a = GetUnusableColor()
+    -- Match ItemButton.lua exactly: configured alpha is reduced once by 45%.
+    local alpha = (a or 1.0) * 0.45
+    overlay:SetVertexColor(r or 0.9, g or 0.2, b or 0.2, alpha)
     overlay:Show()
 end
 
