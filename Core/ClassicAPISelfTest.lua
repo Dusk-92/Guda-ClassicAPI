@@ -58,9 +58,22 @@ local function CompareContainer(state, bagID, label)
                         label, bagID, slotID, tostring(vanillaID), tostring(classicID)))
                 end
 
-                if (count or 1) ~= (info.stackCount or 1) then
-                    AddMismatch(state, format("%s %d:%d count %s ~= %s",
-                        label, bagID, slotID, tostring(count), tostring(info.stackCount)))
+                -- An occupied slot cannot have a real stack size <= 0. The
+                -- legacy 1.12/Turtle GetContainerItemInfo path can expose
+                -- negative sentinel-like values for some special bank items.
+                -- Treat only that invalid Vanilla value as non-comparable;
+                -- any disagreement between two positive counts still fails.
+                local vanillaCount = tonumber(count)
+                local classicCount = tonumber(info.stackCount)
+                if vanillaCount and vanillaCount <= 0 then
+                    state.countUnknown = state.countUnknown + 1
+                else
+                    vanillaCount = vanillaCount or 1
+                    classicCount = classicCount or 1
+                    if vanillaCount ~= classicCount then
+                        AddMismatch(state, format("%s %d:%d count %s ~= %s",
+                            label, bagID, slotID, tostring(count), tostring(info.stackCount)))
+                    end
                 end
 
                 if (locked and true or false) ~= (info.isLocked and true or false) then
@@ -75,9 +88,9 @@ local function CompareContainer(state, bagID, label)
 
                 -- ClassicAPI deliberately leaves cache-dependent fields nil
                 -- when static item data is cold. Vanilla 1.12 can also return
-                -- quality=-1 for an occupied slot while the item cache is not
-                -- authoritative yet. Treat nil/negative quality as unknown,
-                -- but still fail on any disagreement between two known values.
+                -- quality=-1 as a legacy special/unknown value. Treat nil or
+                -- negative quality as non-comparable, but still fail on any
+                -- disagreement between two known quality values.
                 if texture and info.iconFileID and texture ~= info.iconFileID then
                     AddMismatch(state, format("%s %d:%d texture differs",
                         label, bagID, slotID))
@@ -122,7 +135,12 @@ function SelfTest:Run()
         return false
     end
 
-    local state = { checked = 0, mismatches = 0, qualityUnknown = 0 }
+    local state = {
+        checked = 0,
+        mismatches = 0,
+        qualityUnknown = 0,
+        countUnknown = 0,
+    }
 
     for bagID = 0, 4 do
         CompareContainer(state, bagID, "bag")
@@ -165,8 +183,13 @@ function SelfTest:Run()
     end
 
     if state.qualityUnknown > 0 then
-        addon:Print("Quality comparison skipped for %d slot(s) with uncached/unknown quality.",
+        addon:Print("Quality comparison skipped for %d slot(s) with legacy/unknown quality.",
             state.qualityUnknown)
+    end
+
+    if state.countUnknown > 0 then
+        addon:Print("Count comparison skipped for %d slot(s) with invalid legacy count.",
+            state.countUnknown)
     end
 
     if state.mismatches == 0 then
