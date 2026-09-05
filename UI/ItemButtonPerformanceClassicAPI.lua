@@ -19,6 +19,7 @@ local glowDrivers = {}
 local glowDriverCount = 0
 local glowScanAccum = 0
 local glowPulseTime = 0
+local GLOW_RESCAN_INTERVAL = 0.75
 
 local sharedGlowDriver = CreateFrame("Frame", "Guda_SharedDropGlowDriver", UIParent)
 sharedGlowDriver:Hide()
@@ -94,7 +95,12 @@ end
 
 local function StartSharedGlowDriver()
     if not sharedGlowDriver:IsShown() then
-        glowScanAccum = 0.1 -- discover existing/new drivers immediately
+        -- BagFrame:SetDragging() redraws drop targets synchronously, so by the
+        -- time the cursor watcher reaches here the glow drivers normally
+        -- already exist. Discover them once immediately; only rare late-created
+        -- drivers require the slow fallback rescan below.
+        ScanGlowDrivers()
+        glowScanAccum = 0
         sharedGlowDriver:Show()
     end
 end
@@ -103,9 +109,10 @@ sharedGlowDriver:SetScript("OnUpdate", function()
     glowPulseTime = glowPulseTime + arg1
     glowScanAccum = glowScanAccum + arg1
 
-    -- Drop-target drivers are created lazily by ItemButton.lua. Scan only
-    -- while an item is being dragged, and at 10 Hz rather than every frame.
-    if glowScanAccum >= 0.1 then
+    -- Rare fallback for drivers created after the initial drag redraw. Keep
+    -- this deliberately infrequent: EnumerateFrames is much more expensive
+    -- than the single shared sine calculation we are trying to optimize.
+    if glowScanAccum >= GLOW_RESCAN_INTERVAL then
         glowScanAccum = 0
         ScanGlowDrivers()
     end
