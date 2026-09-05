@@ -1,12 +1,14 @@
--- Preserve Guda's historical charge overlay behavior while using ClassicAPI.
--- ClassicAPI reports 1 for many single-use items; Guda historically only
--- displayed charges when the tooltip explicitly contained a Charges line.
+-- Preserve Guda's original charge overlay behavior.
+-- ClassicAPI's container charge value is not reliable for distinguishing
+-- ordinary stack counts from explicit item charges on the target client, so
+-- only show the yellow "xN" overlay when the item tooltip actually contains a
+-- Charges line (matching upstream Guda behavior).
 
 local addon = Guda
 local ItemDetection = addon.Modules.ItemDetection
 if not ItemDetection then return end
 
-local fastGetCharges = ItemDetection.GetCharges
+local chargesCache = {}
 
 local function SafeSetHyperlink(tooltip, link)
     if not link then return false end
@@ -28,7 +30,7 @@ local function GetExplicitTooltipCharges(itemData, bagID, slotID)
     if not ok then
         ok = SafeSetHyperlink(tooltip, itemData and itemData.link)
     end
-    if not ok then return nil end
+    if not ok then return nil, false end
 
     local numLines = tooltip:NumLines() or 0
     for i = 1, numLines do
@@ -36,21 +38,40 @@ local function GetExplicitTooltipCharges(itemData, bagID, slotID)
         local text = line and line:GetText()
         if text then
             local _, _, num = string.find(string.lower(text), "^(%d+) charges?$")
-            if num then return tonumber(num) end
+            if num then return tonumber(num), numLines >= 2 end
         end
     end
-    return nil
+    return nil, numLines >= 2
 end
 
 function ItemDetection:GetCharges(itemData, bagID, slotID)
-    local charges = fastGetCharges(self, itemData, bagID, slotID)
-    if charges ~= 1 then
-        return charges
+    if not bagID or not slotID then return nil end
+
+    local slotKey = bagID .. ":" .. slotID
+    local cached = chargesCache[slotKey]
+    if cached ~= nil then
+        if cached == false then return nil end
+        return cached
     end
 
-    -- A native value of 1 is ambiguous: it can mean a true one-charge item or
-    -- simply a single-use spell item. Confirm only this rare case via tooltip.
-    return GetExplicitTooltipCharges(itemData, bagID, slotID)
+    local charges, complete = GetExplicitTooltipCharges(itemData, bagID, slotID)
+    if complete then
+        chargesCache[slotKey] = charges or false
+    end
+    return charges
 end
 
-addon:Debug("ClassicAPI charge compatibility filter enabled")
+function ItemDetection:InvalidateCharges(bagID)
+    if bagID then
+        local prefix = bagID .. ":"
+        for key in pairs(chargesCache) do
+            if string.find(key, "^" .. prefix) then
+                chargesCache[key] = nil
+            end
+        end
+    else
+        chargesCache = {}
+    end
+end
+
+addon:Debug("Upstream-compatible charge display enabled")
