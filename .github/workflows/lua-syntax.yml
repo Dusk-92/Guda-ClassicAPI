@@ -1,0 +1,50 @@
+name: Lua syntax
+
+on:
+  push:
+    branches:
+      - test/classicapi-core
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1
+
+      - name: Parse Lua files
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            echo "Checking $file"
+            luac5.1 -p "$file"
+          done < <(find . -type f -name '*.lua' -print0)
+
+      - name: Validate Guda.toc paths
+        shell: python
+        run: |
+          from pathlib import Path
+
+          root = Path('.')
+          missing = []
+          for raw in Path('Guda.toc').read_text(encoding='utf-8').splitlines():
+              line = raw.strip()
+              if not line or line.startswith('#'):
+                  continue
+              path = root / line.replace('\\', '/')
+              if not path.is_file():
+                  missing.append(line)
+
+          if missing:
+              raise SystemExit('Missing TOC files:\n' + '\n'.join(missing))
+
+          print('Guda.toc integrity OK')
