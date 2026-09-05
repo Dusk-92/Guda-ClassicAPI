@@ -1,8 +1,8 @@
 ## Interface: 11200
-## Title: Guda
-## Notes: All-in-one bag and bank addon for World of Warcraft 1.12.1 (Turtle WoW)
-## Author: Vati
-## Version: 2.3.2
+## Title: Guda ClassicAPI
+## Notes: All-in-one bag and bank addon for World of Warcraft 1.12.1 (Turtle WoW), optimized for ClassicAPI
+## Author: Vati; ClassicAPI fork by Dusk-92
+## Version: 2.3.2-classicapi-test
 ## SavedVariables: Guda_DB
 ## SavedVariablesPerCharacter: Guda_CharDB
 ## OptionalDeps: pfUI
@@ -18,6 +18,8 @@ Core\SharedData.lua
 DB\QuestItems.lua
 Core\Events.lua
 Core\Utils.lua
+Core\ClassicAPI.lua
+Core\Performance.lua
 Core\ItemDetection.lua
 Core\CategoryManager.lua
 Core\Tooltip.lua
