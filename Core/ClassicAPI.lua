@@ -12,6 +12,8 @@ local hasContainerInfo = type(C_Container) == "table"
     and type(C_Container.GetContainerItemInfo) == "function"
 local hasContainerItemID = type(C_Container) == "table"
     and type(C_Container.GetContainerItemID) == "function"
+local hasContainerCharges = type(C_Container) == "table"
+    and type(C_Container.GetContainerItemCharges) == "function"
 
 local function ExtractItemID(link)
     if not link then return nil end
@@ -29,6 +31,10 @@ end
 
 function ClassicAPI:HasContainerItemID()
     return hasContainerItemID
+end
+
+function ClassicAPI:HasContainerItemCharges()
+    return hasContainerCharges
 end
 
 -- Returns a modern-style ContainerItemInfo table.
@@ -81,10 +87,21 @@ function ClassicAPI:GetContainerItemLink(bagID, slotID, info)
     return GetContainerItemLink(bagID, slotID)
 end
 
+-- ClassicAPI reads the live per-instance charge count directly from the item.
+-- This avoids a hidden-tooltip scan just to parse strings such as "5 Charges".
+-- Returns nil when ClassicAPI does not expose the function, the slot is empty,
+-- or the item does not have a charge concept.
+function ClassicAPI:GetContainerItemCharges(bagID, slotID)
+    if bagID == nil or slotID == nil or slotID < 1 then return nil end
+    if not hasContainerCharges then return nil end
+    return C_Container.GetContainerItemCharges(bagID, slotID)
+end
+
 function ClassicAPI:GetStatus()
     return {
         available = self:IsAvailable(),
         containerInfo = hasContainerInfo,
         containerItemID = hasContainerItemID,
+        containerCharges = hasContainerCharges,
     }
 end
