@@ -34,6 +34,7 @@ Core\AutoLoot.lua
 Core\CacheWarmer.lua
 
 Data\BagScanner.lua
+Data\ItemCategoryOverrides.lua
 Data\BankScanner.lua
 Data\CacheLifecycleSafety.lua
 Data\MailboxScanner.lua
