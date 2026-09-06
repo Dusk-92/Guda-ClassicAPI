@@ -1,0 +1,67 @@
+name: Retry live charge refresh
+
+on:
+  push:
+    branches:
+      - refactor/consolidate-patch-layers
+
+permissions:
+  contents: write
+
+jobs:
+  retry:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/consolidate-patch-layers
+          fetch-depth: 0
+
+      - name: Apply prepared charge fix
+        shell: python
+        run: |
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/fix-charge-refresh.yml')
+          text = workflow.read_text(encoding='utf-8')
+          start_marker = '          from pathlib import Path\n'
+          end_marker = "          Path('.github/workflows/fix-charge-refresh.yml').unlink()\n"
+          start = text.index(start_marker)
+          end = text.index(end_marker, start) + len(end_marker)
+          script = textwrap.dedent(text[start:end])
+          exec(compile(script, str(workflow), 'exec'))
+
+          Path('.github/workflows/fix-charge-refresh-retry.yml').unlink()
+
+      - name: Validate Lua and TOC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+          set -e
+          find . -name '*.lua' -print0 | while IFS= read -r -d '' f; do
+            luac5.1 -p "$f"
+          done
+          python - <<'PY'
+          from pathlib import Path
+          missing = []
+          for raw in Path('Guda.toc').read_text(encoding='utf-8').splitlines():
+              line = raw.strip()
+              if not line or line.startswith('#'):
+                  continue
+              path = Path(line.replace('\\', '/'))
+              if not path.exists():
+                  missing.append(line)
+          if missing:
+              raise SystemExit('Missing TOC files: ' + ', '.join(missing))
+          print('Lua parse + TOC validation OK')
+          PY
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: refresh live item charges in bags and bank"
+          git push origin HEAD:refactor/consolidate-patch-layers
