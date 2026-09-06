@@ -4215,12 +4215,25 @@ end
 
 -- Refresh only known charge-bearing items in one changed bag.
 -- Normal stacks remain on the cached negative path and incur no tooltip scan.
-function BagFrame:RefreshKnownChargeOverlays(bagID)
+function BagFrame:RefreshKnownChargeOverlays(bagID, slotID)
     local detection = addon.Modules.ItemDetection
     if not detection or not detection.IsKnownChargeItem or not Guda_ItemButton_UpdateCharges then return end
 
-    detection:InvalidateCharges(bagID)
     local buttons = slotToButton[bagID]
+
+    -- ITEM_LOCK_CHANGED gives us an exact slot. In that path, avoid touching
+    -- any other item or negative charge-cache entry in the bag.
+    if slotID then
+        local button = buttons and (buttons[slotID] or buttons[tonumber(slotID)])
+        if button and button.hasItem and button:IsShown()
+           and detection:IsKnownChargeItem(button.itemData) then
+            detection:InvalidateCharges(bagID, slotID)
+            Guda_ItemButton_UpdateCharges(button)
+        end
+        return
+    end
+
+    detection:InvalidateCharges(bagID)
     if not buttons then return end
 
     for _, button in pairs(buttons) do
@@ -4328,7 +4341,41 @@ function BagFrame:Initialize()
  local bagUpdateFrame = CreateFrame("Frame")
  bagUpdateFrame:RegisterEvent("BAG_UPDATE")
  bagUpdateFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+ bagUpdateFrame:RegisterEvent("ITEM_LOCK_CHANGED")
  bagUpdateFrame:SetScript("OnEvent", function()
+     -- Charged consumables such as Wizard Oil can change their remaining
+     -- charges without producing a useful BAG_UPDATE. ITEM_LOCK_CHANGED gives
+     -- the exact bag/slot: wait for the unlock edge, then refresh that one
+     -- already-known charge item on the following frame.
+     if event == "ITEM_LOCK_CHANGED" then
+         local lockBagID = tonumber(arg1)
+         local lockSlotID = tonumber(arg2)
+         if not lockBagID or not lockSlotID or lockBagID < 0 or lockBagID > 4 then return end
+
+         local _, _, isLocked = GetContainerItemInfo(lockBagID, lockSlotID)
+         if isLocked then return end
+
+         local function RefreshUnlockedCharge()
+             if currentViewChar then return end
+             if not Guda_BagFrame or not Guda_BagFrame:IsShown() then
+                 -- No visible overlay to update; discard this slot's positive
+                 -- cache so the next render reads the live tooltip value.
+                 if addon.Modules.ItemDetection and addon.Modules.ItemDetection.InvalidateCharges then
+                     addon.Modules.ItemDetection:InvalidateCharges(lockBagID, lockSlotID)
+                 end
+                 return
+             end
+             BagFrame:RefreshKnownChargeOverlays(lockBagID, lockSlotID)
+         end
+
+         if Guda_ScheduleTimer then
+             Guda_ScheduleTimer(0, RefreshUnlockedCharge)
+         else
+             RefreshUnlockedCharge()
+         end
+         return
+     end
+
      -- ClassicAPI fires BAG_UPDATE_DELAYED at the tail of the world tick, after
      -- all BAG_UPDATE events for that frame and after bag contents have settled.
      -- This is the correct point to rescan instance-only data such as charges.
