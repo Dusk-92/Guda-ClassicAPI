@@ -22,11 +22,22 @@ local function UpdateHeaderTitleLayout()
     title:SetPoint("LEFT", leftButton, "RIGHT", 8, 0)
     title:SetPoint("RIGHT", rightButton, "LEFT", -8, 0)
     title:SetJustifyH("CENTER")
-    title:SetJustifyV("MIDDLE")
 end
 
+-- Recalculate when the search control changes because it changes the free header space.
 local OriginalUpdateSearchBarVisibility = BagFrame.UpdateSearchBarVisibility
 function BagFrame:UpdateSearchBarVisibility()
     OriginalUpdateSearchBarVisibility(self)
     UpdateHeaderTitleLayout()
+end
+
+-- Apply once more after the complete bag OnShow path. This guarantees the XML title
+-- already exists and prevents later layout work during opening from leaving the title
+-- on its original frame-centered anchor.
+local OriginalBagFrameOnShow = Guda_BagFrame_OnShow
+if OriginalBagFrameOnShow then
+    function Guda_BagFrame_OnShow(self)
+        OriginalBagFrameOnShow(self)
+        UpdateHeaderTitleLayout()
+    end
 end
