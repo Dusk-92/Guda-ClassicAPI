@@ -45,6 +45,7 @@ UI\ItemButton.lua
 UI\ItemButtonPerformanceClassicAPI.lua
 UI\FrameHelpers.lua
 UI\BagFrame.lua
+UI\BagHighlightFlyoutFix.lua
 UI\BankFrame.lua
 UI\MailboxFrame.lua
 UI\QuestItemBar.lua
