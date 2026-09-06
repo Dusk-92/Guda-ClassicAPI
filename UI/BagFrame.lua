@@ -4338,11 +4338,47 @@ function BagFrame:Initialize()
  -- Update on bag changes (debounced to prevent lag on rapid bag updates)
  -- Register directly to access arg1 (bagID that changed) for incremental cache updates
  local pendingChargeBags = {}
+ local equippedChargeRefreshPending = false
  local bagUpdateFrame = CreateFrame("Frame")
  bagUpdateFrame:RegisterEvent("BAG_UPDATE")
  bagUpdateFrame:RegisterEvent("BAG_UPDATE_DELAYED")
  bagUpdateFrame:RegisterEvent("ITEM_LOCK_CHANGED")
+ bagUpdateFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
  bagUpdateFrame:SetScript("OnEvent", function()
+     -- Applying a temporary weapon enchant (oils/stones/poisons) changes the
+     -- equipped weapon state even when the source bag slot does not emit a
+     -- useful bag update. Refresh only previously-known charge items after the
+     -- server-confirmed equipment change has had a moment to settle.
+     if event == "UNIT_INVENTORY_CHANGED" and arg1 == "player" then
+         if equippedChargeRefreshPending then return end
+         equippedChargeRefreshPending = true
+
+         local function RefreshEquippedChargeUse()
+             equippedChargeRefreshPending = false
+
+             if currentViewChar then return end
+
+             if Guda_BagFrame and Guda_BagFrame:IsShown() then
+                 for chargeBagID = 0, 4 do
+                     BagFrame:RefreshKnownChargeOverlays(chargeBagID)
+                 end
+             elseif addon.Modules.ItemDetection and addon.Modules.ItemDetection.InvalidateCharges then
+                 -- No visible overlays: invalidate only positive/known charge
+                 -- state so the next bag render reads the live remaining count.
+                 for chargeBagID = 0, 4 do
+                     addon.Modules.ItemDetection:InvalidateCharges(chargeBagID)
+                 end
+             end
+         end
+
+         if Guda_ScheduleTimer then
+             Guda_ScheduleTimer(0.15, RefreshEquippedChargeUse)
+         else
+             RefreshEquippedChargeUse()
+         end
+         return
+     end
+
      -- Charged consumables such as Wizard Oil can change their remaining
      -- charges without producing a useful BAG_UPDATE. ITEM_LOCK_CHANGED gives
      -- the exact bag/slot: wait for the unlock edge, then refresh that one
