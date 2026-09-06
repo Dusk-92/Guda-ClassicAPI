@@ -12,6 +12,12 @@ local detectionCache = {}
 local cacheHits = 0
 local cacheMisses = 0
 
+-- Explicit charge overlays are cached per live slot. Negative results are kept
+-- across ordinary BAG_UPDATE events so normal stacks do not trigger a tooltip
+-- scan every time their count changes.
+local chargesCache = {}
+local chargeCapableLinks = {}
+
 local EMPTY_PROPERTIES = {
     isQuestItem = false,
     isQuestStarter = false,
@@ -199,6 +205,7 @@ local function ScanProperties(itemData, bagID, slotID)
 
     local numLines = tooltip:NumLines() or 0
     local complete = numLines >= 2
+    local explicitCharges = nil
 
     for i = 1, numLines do
         local leftLine = getglobal(tooltipName .. "TextLeft" .. i)
@@ -206,6 +213,13 @@ local function ScanProperties(itemData, bagID, slotID)
         local leftText = leftLine and leftLine:GetText() or ""
         local rightText = rightLine and rightLine:GetText() or ""
         local leftLower = leftText ~= "" and string.lower(leftText) or ""
+
+        -- Reuse this same tooltip pass for charge detection. This avoids a
+        -- second synchronous tooltip scan later when ItemButton asks for xN.
+        local _, _, chargeCount = string.find(leftLower, "^(%d+) charges?$")
+        if chargeCount then
+            explicitCharges = tonumber(chargeCount)
+        end
 
         local lr, lg, lb = 1, 1, 1
         if leftLine and leftLine.GetTextColor then
@@ -271,6 +285,20 @@ local function ScanProperties(itemData, bagID, slotID)
         result.isQuestUsable = false
     end
 
+    -- Seed the per-slot charge cache from the property scan we already paid
+    -- for. Store the item link with the result so slot swaps cannot reuse stale
+    -- charge data.
+    if bagID and slotID and complete then
+        local slotKey = bagID .. ":" .. slotID
+        chargesCache[slotKey] = {
+            link = itemData.link,
+            charges = explicitCharges or false,
+        }
+        if explicitCharges and itemData.link then
+            chargeCapableLinks[itemData.link] = true
+        end
+    end
+
     return result, complete
 end
 
@@ -334,53 +362,17 @@ function ItemDetection:IsUnusableCached(itemData)
     return props.isUnusable
 end
 
--- ClassicAPI can read charges directly from the live item descriptor, making
--- tooltip text parsing unnecessary for the common path.
-function ItemDetection:GetCharges(itemData, bagID, slotID)
-    if not bagID or not slotID then return nil end
-
-    local api = addon.Modules.ClassicAPI
-    if api and api.HasContainerItemCharges and api:HasContainerItemCharges() then
-        return api:GetContainerItemCharges(bagID, slotID)
-    end
-
-    if originalGetCharges then
-        return originalGetCharges(self, itemData, bagID, slotID)
-    end
-    return nil
-end
-
--- No per-slot tooltip charge cache is needed when ClassicAPI provides the
--- descriptor value. Keep this method for callers and for the Vanilla fallback.
-local originalInvalidateCharges = ItemDetection.InvalidateCharges
-function ItemDetection:InvalidateCharges(bagID)
-    local api = addon.Modules.ClassicAPI
-    if api and api.HasContainerItemCharges and api:HasContainerItemCharges() then
-        return
-    end
-    if originalInvalidateCharges then
-        return originalInvalidateCharges(self, bagID)
-    end
-end
-
 addon:Debug("ClassicAPI single-pass ItemDetection enabled")
 
 --=====================================================
--- Consolidated from Core/ItemChargesClassicAPI.lua
+-- Explicit charge overlay cache
 --=====================================================
--- Preserve Guda's original charge overlay behavior.
--- ClassicAPI's container charge value is not reliable for distinguishing
--- ordinary stack counts from explicit item charges on the target client, so
--- only show the yellow "xN" overlay when the item tooltip actually contains a
--- Charges line (matching upstream Guda behavior).
+-- ClassicAPI charge values can mirror ordinary stack counts on this client,
+-- so a yellow xN overlay is still shown only after the tooltip explicitly
+-- confirms a Charges line. The cache below keeps negative results across bag
+-- updates and invalidates real charge items conservatively.
 
-local addon = Guda
-local ItemDetection = addon.Modules.ItemDetection
-if not ItemDetection then return end
-
-local chargesCache = {}
-
-local function SafeSetHyperlink(tooltip, link)
+local function ChargeSafeSetHyperlink(tooltip, link)
     if not link then return false end
     local _, _, bare = string.find(link, "|H(item:[^|]+)|h")
     if not bare and string.find(link, "^item:") then bare = link end
@@ -398,7 +390,7 @@ local function GetExplicitTooltipCharges(itemData, bagID, slotID)
         ok = pcall(tooltip.SetBagItem, tooltip, bagID, slotID)
     end
     if not ok then
-        ok = SafeSetHyperlink(tooltip, itemData and itemData.link)
+        ok = ChargeSafeSetHyperlink(tooltip, itemData and itemData.link)
     end
     if not ok then return nil, false end
 
@@ -418,33 +410,53 @@ function ItemDetection:GetCharges(itemData, bagID, slotID)
     if not bagID or not slotID then return nil end
 
     local slotKey = bagID .. ":" .. slotID
+    local itemLink = itemData and itemData.link or nil
     local cached = chargesCache[slotKey]
-    if cached ~= nil then
-        if cached == false then return nil end
-        return cached
+
+    -- A slot cache is valid only for the exact item link currently occupying
+    -- it. Normal stacks usually hit the cached `false` path here with no
+    -- tooltip work at all.
+    if cached and cached.link == itemLink then
+        if cached.charges == false then return nil end
+        return cached.charges
     end
 
     local charges, complete = GetExplicitTooltipCharges(itemData, bagID, slotID)
     if complete then
-        chargesCache[slotKey] = charges or false
+        chargesCache[slotKey] = {
+            link = itemLink,
+            charges = charges or false,
+        }
+        if charges and itemLink then
+            chargeCapableLinks[itemLink] = true
+        end
     end
     return charges
 end
 
 function ItemDetection:InvalidateCharges(bagID)
-    if bagID then
-        local prefix = bagID .. ":"
-        for key in pairs(chargesCache) do
-            if string.find(key, "^" .. prefix) then
+    if not bagID then
+        chargesCache = {}
+        chargeCapableLinks = {}
+        return
+    end
+
+    local prefix = bagID .. ":"
+    for key, cached in pairs(chargesCache) do
+        if string.find(key, "^" .. prefix) then
+            -- Keep proven negative results for ordinary items. A changed slot
+            -- is still safe because GetCharges validates cached.link against
+            -- the current item link. Real/known charge items are discarded so
+            -- their remaining charge count is refreshed exactly from tooltip.
+            if not cached or cached.charges ~= false
+               or (cached.link and chargeCapableLinks[cached.link]) then
                 chargesCache[key] = nil
             end
         end
-    else
-        chargesCache = {}
     end
 end
 
-addon:Debug("Upstream-compatible charge display enabled")
+addon:Debug("Explicit charge cache optimization enabled")
 
 --=====================================================
 -- Consolidated from Core/ItemDetectionCacheSafety.lua
