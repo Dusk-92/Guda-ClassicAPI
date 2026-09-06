@@ -22,21 +22,16 @@ Core\ClassicAPI.lua
 Core\Performance.lua
 Core\ItemDetection.lua
 Core\ItemDetectionClassicAPI.lua
-Core\ItemChargesClassicAPI.lua
-Core\ItemDetectionCacheSafety.lua
 Core\CategoryManager.lua
 Core\ManualJunkAutoSell.lua
 Core\Tooltip.lua
 Core\InventoryIndex.lua
-Core\InventoryIndexSafety.lua
 Core\ClamOpener.lua
 Core\AutoLoot.lua
 Core\CacheWarmer.lua
 
 Data\BagScanner.lua
-Data\ItemCategoryOverrides.lua
 Data\BankScanner.lua
-Data\CacheLifecycleSafety.lua
 Data\MailboxScanner.lua
 Data\MoneyTracker.lua
 Data\EquipmentScanner.lua
@@ -48,18 +43,13 @@ Sorting\BagReplacer.lua
 # UI Lua must load before XML so OnLoad handlers exist
 UI\ItemButton.lua
 UI\ItemButtonPerformanceClassicAPI.lua
-UI\UsabilityTintClassicAPI.lua
-UI\TooltipPositionFix.lua
 UI\FrameHelpers.lua
 UI\BagFrame.lua
 UI\BankFrame.lua
 UI\MailboxFrame.lua
 UI\QuestItemBar.lua
-UI\QuestItemBarClassicAPI.lua
-UI\QuestItemBarMoveSafety.lua
 UI\TrackedItemBar.lua
 UI\TrackedItemBarClassicAPI.lua
-UI\TrackedItemBarMoveSafety.lua
 UI\SettingsPopup.lua
 UI\ItemButton.xml
 UI\BagFrame.xml
