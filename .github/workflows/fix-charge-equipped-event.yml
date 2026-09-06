@@ -1,0 +1,69 @@
+name: Apply equipped charge refresh
+
+on:
+  push:
+    branches:
+      - refactor/consolidate-patch-layers
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/consolidate-patch-layers
+          fetch-depth: 0
+
+      - name: Refresh known charges after equipped inventory changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('UI/BagFrame.lua')
+          t = p.read_text(encoding='utf-8')
+
+          old = ''' local pendingChargeBags = {}\n local bagUpdateFrame = CreateFrame("Frame")\n bagUpdateFrame:RegisterEvent("BAG_UPDATE")\n bagUpdateFrame:RegisterEvent("BAG_UPDATE_DELAYED")\n bagUpdateFrame:RegisterEvent("ITEM_LOCK_CHANGED")\n bagUpdateFrame:SetScript("OnEvent", function()\n     -- Charged consumables such as Wizard Oil can change their remaining\n'''
+
+          new = ''' local pendingChargeBags = {}\n local equippedChargeRefreshPending = false\n local bagUpdateFrame = CreateFrame("Frame")\n bagUpdateFrame:RegisterEvent("BAG_UPDATE")\n bagUpdateFrame:RegisterEvent("BAG_UPDATE_DELAYED")\n bagUpdateFrame:RegisterEvent("ITEM_LOCK_CHANGED")\n bagUpdateFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")\n bagUpdateFrame:SetScript("OnEvent", function()\n     -- Applying a temporary weapon enchant (oils/stones/poisons) changes the\n     -- equipped weapon state even when the source bag slot does not emit a\n     -- useful bag update. Refresh only previously-known charge items after the\n     -- server-confirmed equipment change has had a moment to settle.\n     if event == "UNIT_INVENTORY_CHANGED" and arg1 == "player" then\n         if equippedChargeRefreshPending then return end\n         equippedChargeRefreshPending = true\n\n         local function RefreshEquippedChargeUse()\n             equippedChargeRefreshPending = false\n\n             if currentViewChar then return end\n\n             if Guda_BagFrame and Guda_BagFrame:IsShown() then\n                 for chargeBagID = 0, 4 do\n                     BagFrame:RefreshKnownChargeOverlays(chargeBagID)\n                 end\n             elseif addon.Modules.ItemDetection and addon.Modules.ItemDetection.InvalidateCharges then\n                 -- No visible overlays: invalidate only positive/known charge\n                 -- state so the next bag render reads the live remaining count.\n                 for chargeBagID = 0, 4 do\n                     addon.Modules.ItemDetection:InvalidateCharges(chargeBagID)\n                 end\n             end\n         end\n\n         if Guda_ScheduleTimer then\n             Guda_ScheduleTimer(0.15, RefreshEquippedChargeUse)\n         else\n             RefreshEquippedChargeUse()\n         end\n         return\n     end\n\n     -- Charged consumables such as Wizard Oil can change their remaining\n'''
+
+          if old not in t:
+              raise SystemExit('BagFrame charge event registration block not found')
+          t = t.replace(old, new, 1)
+          p.write_text(t, encoding='utf-8')
+
+          Path('.github/workflows/fix-charge-equipped-event.yml').unlink()
+
+      - name: Validate Lua and TOC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+          set -e
+          find . -name '*.lua' -print0 | while IFS= read -r -d '' f; do
+            luac5.1 -p "$f"
+          done
+          python - <<'PY'
+          from pathlib import Path
+          missing = []
+          for raw in Path('Guda.toc').read_text(encoding='utf-8').splitlines():
+              line = raw.strip()
+              if not line or line.startswith('#'):
+                  continue
+              path = Path(line.replace('\\', '/'))
+              if not path.exists():
+                  missing.append(line)
+          if missing:
+              raise SystemExit('Missing TOC files: ' + ', '.join(missing))
+          print('Lua parse + TOC validation OK')
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: refresh charges after weapon enchant changes"
+          git push origin HEAD:refactor/consolidate-patch-layers
