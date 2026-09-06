@@ -115,7 +115,16 @@ local function PrepareTooltip(bagID, slotID, itemLink)
 
     if bagID and slotID then
         if bagID == -1 then
-            if not SafeSetHyperlink(tooltip, itemLink) then return nil, nil end
+            local ok = false
+            local bankOpen = addon.Modules.BankScanner
+                and addon.Modules.BankScanner.IsBankOpen
+                and addon.Modules.BankScanner:IsBankOpen()
+            if bankOpen and tooltip.SetInventoryItem then
+                ok = pcall(tooltip.SetInventoryItem, tooltip, "player", 39 + slotID)
+            end
+            if not ok then
+                if not SafeSetHyperlink(tooltip, itemLink) then return nil, nil end
+            end
         else
             local ok = pcall(tooltip.SetBagItem, tooltip, bagID, slotID)
             if not ok then
@@ -447,8 +456,9 @@ end
 
 function ItemDetection:InvalidateCharges(bagID, slotID)
     if not bagID then
+        -- Per-slot values are live instance state, but whether an item link
+        -- has an explicit Charges line is stable for this UI session.
         chargesCache = {}
-        chargeCapableLinks = {}
         return
     end
 

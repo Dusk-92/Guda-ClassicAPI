@@ -96,23 +96,49 @@ end
 
 -- Scan bags for quest items (optimized: single tooltip scan per item)
 function QuestItemBar:ScanForQuestItems()
-    questItems = {}
+    -- Reuse the existing table so repeated bag refreshes do not create
+    -- another questItems table for the Lua GC.
+    for i = table.getn(questItems), 1, -1 do
+        questItems[i] = nil
+    end
 
-    -- Scan backpack and 4 bags
+    local scanner = addon.Modules.BagScanner
+    local bagData = scanner and scanner.GetBagData and scanner:GetBagData()
+    if not bagData then return end
+
+    local detection = addon.Modules.ItemDetection
+
+    -- Consume the exact snapshot already used by the bag UI. No
+    -- independent GetContainerNumSlots/GetContainerItemInfo pass.
     for bagID = 0, 4 do
-        local numSlots = GetContainerNumSlots(bagID)
-        for slotID = 1, numSlots do
-            local texture, count = GetContainerItemInfo(bagID, slotID)
-            if texture then
-                -- Single combined check instead of two separate tooltip scans
-                local isQuest, isStarter, isUsable = self:CheckQuestItemUsable(bagID, slotID)
-                if isQuest and isUsable and not isStarter then
-                    table.insert(questItems, {
-                        bagID = bagID,
-                        slotID = slotID,
-                        texture = texture,
-                        count = count
-                    })
+        local bag = bagData[bagID]
+        if bag and bag.slots then
+            local numSlots = bag.numSlots or 0
+            for slotID = 1, numSlots do
+                local itemData = bag.slots[slotID]
+                if itemData then
+                    local isQuest, isStarter, isUsable = false, false, false
+
+                    if detection then
+                        local props = detection:GetItemProperties(itemData, bagID, slotID)
+                        if props then
+                            isQuest = props.isQuestItem and true or false
+                            isStarter = props.isQuestStarter and true or false
+                            isUsable = props.isQuestUsable and true or false
+                        end
+                    else
+                        isQuest, isStarter, isUsable = self:CheckQuestItemUsable(bagID, slotID)
+                    end
+
+                    if isQuest and isUsable and not isStarter then
+                        table.insert(questItems, {
+                            bagID = bagID,
+                            slotID = slotID,
+                            texture = itemData.texture,
+                            count = itemData.count or 1,
+                            link = itemData.link,
+                        })
+                    end
                 end
             end
         end

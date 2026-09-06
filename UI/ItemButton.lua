@@ -1784,6 +1784,13 @@ function Guda_ItemButton_UpdateCharges(button)
     local chargesText = getglobal(button:GetName().."_Charges")
     if not chargesText then return end
 
+    -- Saved banks / other-character views have no live item instance
+    -- behind the displayed slot. Never read the current player slot.
+    if button.isReadOnly or button.otherChar then
+        chargesText:Hide()
+        return
+    end
+
     local charges = nil
     if button.hasItem and button.itemData and addon.Modules.ItemDetection then
         charges = addon.Modules.ItemDetection:GetCharges(button.itemData, button.bagID, button.slotID)
