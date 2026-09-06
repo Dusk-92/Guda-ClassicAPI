@@ -1,0 +1,152 @@
+name: Fix live charge refresh
+
+on:
+  push:
+    branches:
+      - refactor/consolidate-patch-layers
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/consolidate-patch-layers
+          fetch-depth: 0
+
+      - name: Fix charge reads and refreshes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # ------------------------------------------------------------
+          # ItemDetection: read main-bank charges from the live bank slot,
+          # expose known-charge state, and support exact slot invalidation.
+          # ------------------------------------------------------------
+          p = Path('Core/ItemDetectionClassicAPI.lua')
+          t = p.read_text(encoding='utf-8')
+
+          old = '''    local ok = false\n    if bagID and slotID and bagID ~= -1 then\n        ok = pcall(tooltip.SetBagItem, tooltip, bagID, slotID)\n    end\n    if not ok then\n        ok = ChargeSafeSetHyperlink(tooltip, itemData and itemData.link)\n    end\n'''
+          new = '''    local ok = false\n    if bagID and slotID then\n        if bagID == -1 and tooltip.SetInventoryItem then\n            -- Main-bank slots are inventory slots 40..67 on the 1.12 client.\n            -- Reading the live slot preserves instance data such as remaining charges.\n            ok = pcall(tooltip.SetInventoryItem, tooltip, "player", 39 + slotID)\n        elseif bagID ~= -1 then\n            ok = pcall(tooltip.SetBagItem, tooltip, bagID, slotID)\n        end\n    end\n    if not ok then\n        ok = ChargeSafeSetHyperlink(tooltip, itemData and itemData.link)\n    end\n'''
+          if old not in t:
+              raise SystemExit('charge tooltip source block not found')
+          t = t.replace(old, new, 1)
+
+          old = '''function ItemDetection:InvalidateCharges(bagID)\n    if not bagID then\n        chargesCache = {}\n        chargeCapableLinks = {}\n        return\n    end\n\n    local prefix = bagID .. ":"\n'''
+          new = '''function ItemDetection:IsKnownChargeItem(itemData)\n    local itemLink = itemData and itemData.link or nil\n    return itemLink and chargeCapableLinks[itemLink] and true or false\nend\n\nfunction ItemDetection:InvalidateCharges(bagID, slotID)\n    if not bagID then\n        chargesCache = {}\n        chargeCapableLinks = {}\n        return\n    end\n\n    if slotID then\n        chargesCache[bagID .. ":" .. slotID] = nil\n        return\n    end\n\n    local prefix = bagID .. ":"\n'''
+          if old not in t:
+              raise SystemExit('InvalidateCharges block not found')
+          t = t.replace(old, new, 1)
+          p.write_text(t, encoding='utf-8')
+
+          # ------------------------------------------------------------
+          # ItemButton: expose the small charge-overlay refresh separately so
+          # bag/bank events never need to rebuild a whole button just for xN.
+          # ------------------------------------------------------------
+          p = Path('UI/ItemButton.lua')
+          t = p.read_text(encoding='utf-8')
+          marker = 'function Guda_ItemButton_SetItem('
+          pos = t.find(marker)
+          if pos < 0:
+              raise SystemExit('Guda_ItemButton_SetItem marker not found')
+
+          helper = '''function Guda_ItemButton_UpdateCharges(button)\n    if not button then return end\n    local chargesText = getglobal(button:GetName().."_Charges")\n    if not chargesText then return end\n\n    local charges = nil\n    if button.hasItem and button.itemData and addon.Modules.ItemDetection then\n        charges = addon.Modules.ItemDetection:GetCharges(button.itemData, button.bagID, button.slotID)\n    end\n\n    if charges and charges > 0 then\n        chargesText:SetText("x" .. charges)\n        chargesText:Show()\n    else\n        chargesText:Hide()\n    end\nend\n\n'''
+          if 'function Guda_ItemButton_UpdateCharges(' not in t:
+              t = t[:pos] + helper + t[pos:]
+
+          old = '''        -- Show/hide charges text (e.g. "x5" for Wizard Oil)\n        if chargesText then\n            local charges = nil\n            if itemData and addon.Modules.ItemDetection then\n                charges = addon.Modules.ItemDetection:GetCharges(itemData, bagID, slotID)\n            end\n            if charges and charges > 0 then\n                chargesText:SetText("x" .. charges)\n                chargesText:Show()\n            else\n                chargesText:Hide()\n            end\n        end\n'''
+          new = '''        -- Show/hide charges text (e.g. "x5" for Wizard Oil).\n        -- Kept as a standalone refresh so charge-only BAG_UPDATE events do not\n        -- need to rebuild the complete item button.\n        Guda_ItemButton_UpdateCharges(self)\n'''
+          if old not in t:
+              raise SystemExit('inline charge block not found')
+          t = t.replace(old, new, 1)
+          p.write_text(t, encoding='utf-8')
+
+          # ------------------------------------------------------------
+          # BagFrame: BAG_UPDATE does not identify the changed slot. Refresh
+          # only overlays whose link is already proven to have real charges.
+          # ------------------------------------------------------------
+          p = Path('UI/BagFrame.lua')
+          t = p.read_text(encoding='utf-8')
+          marker = '-- Initialize\nfunction BagFrame:Initialize()'
+          helper = '''-- Refresh only known charge-bearing items in one changed bag.\n-- Normal stacks remain on the cached negative path and incur no tooltip scan.\nfunction BagFrame:RefreshKnownChargeOverlays(bagID)\n    local detection = addon.Modules.ItemDetection\n    if not detection or not detection.IsKnownChargeItem or not Guda_ItemButton_UpdateCharges then return end\n\n    detection:InvalidateCharges(bagID)\n    local buttons = slotToButton[bagID]\n    if not buttons then return end\n\n    for _, button in pairs(buttons) do\n        if button and button.hasItem and button:IsShown()\n           and detection:IsKnownChargeItem(button.itemData) then\n            Guda_ItemButton_UpdateCharges(button)\n        end\n    end\nend\n\n'''
+          if marker not in t:
+              raise SystemExit('BagFrame Initialize marker not found')
+          if 'function BagFrame:RefreshKnownChargeOverlays(' not in t:
+              t = t.replace(marker, helper + marker, 1)
+
+          old = '''     local viewType = addon.Modules.DB:GetSetting("bagViewType") or "single"\n     addon:DebugCategory("BAG_UPDATE (BagFrame): bagID=%d, viewType=%s", bagID, viewType)\n'''
+          new = '''     local viewType = addon.Modules.DB:GetSetting("bagViewType") or "single"\n     addon:DebugCategory("BAG_UPDATE (BagFrame): bagID=%d, viewType=%s", bagID, viewType)\n\n     -- A charge use can fire BAG_UPDATE without changing item link or stack count.\n     -- Refresh only already-known charge overlays before the incremental diff path.\n     BagFrame:RefreshKnownChargeOverlays(bagID)\n'''
+          if old not in t:
+              raise SystemExit('BagFrame BAG_UPDATE insertion point not found')
+          t = t.replace(old, new, 1)
+          p.write_text(t, encoding='utf-8')
+
+          # ------------------------------------------------------------
+          # BankFrame: exact main-bank slot events refresh one overlay; bank-bag
+          # BAG_UPDATE refreshes only known charge-bearing buttons in that bag.
+          # ------------------------------------------------------------
+          p = Path('UI/BankFrame.lua')
+          t = p.read_text(encoding='utf-8')
+          marker = '-- Initialize\nfunction BankFrame:Initialize()'
+          helper = '''-- Refresh charge overlays without rebuilding bank item buttons.\nfunction BankFrame:RefreshKnownChargeOverlays(bagID, slotID)\n    local detection = addon.Modules.ItemDetection\n    if not detection or not detection.IsKnownChargeItem or not Guda_ItemButton_UpdateCharges then return end\n\n    detection:InvalidateCharges(bagID, slotID)\n    local buttons = bankSlotToButton[bagID]\n    if not buttons then return end\n\n    if slotID then\n        local button = buttons[slotID] or buttons[tonumber(slotID)]\n        if button and button.hasItem and button:IsShown()\n           and detection:IsKnownChargeItem(button.itemData) then\n            Guda_ItemButton_UpdateCharges(button)\n        end\n        return\n    end\n\n    for _, button in pairs(buttons) do\n        if button and button.hasItem and button:IsShown()\n           and detection:IsKnownChargeItem(button.itemData) then\n            Guda_ItemButton_UpdateCharges(button)\n        end\n    end\nend\n\n'''
+          if marker not in t:
+              raise SystemExit('BankFrame Initialize marker not found')
+          if 'function BankFrame:RefreshKnownChargeOverlays(' not in t:
+              t = t.replace(marker, helper + marker, 1)
+
+          old = '''                -- Try single-slot update if not sorting\n                if not isSorting then\n                    -- Invalidate bag scanner cache for fresh slot data\n                    addon.Modules.BankScanner:InvalidateBag(-1)\n                    -- Try single-slot update\n'''
+          new = '''                -- Try single-slot update if not sorting\n                if not isSorting then\n                    -- Refresh instance-only charge data for this exact main-bank slot.\n                    if addon.Modules.ItemDetection and addon.Modules.ItemDetection.InvalidateCharges then\n                        addon.Modules.ItemDetection:InvalidateCharges(-1, arg1)\n                    end\n                    -- Invalidate bag scanner cache for fresh slot data\n                    addon.Modules.BankScanner:InvalidateBag(-1)\n                    -- Try single-slot update\n'''
+          if old not in t:
+              raise SystemExit('main bank exact slot block not found')
+          t = t.replace(old, new, 1)
+
+          old = '''            if arg1 >= 5 and arg1 <= 10 then\n                -- Debug: count items in this bank bag via raw API\n'''
+          new = '''            if arg1 >= 5 and arg1 <= 10 then\n                -- BAG_UPDATE does not expose the changed slot. Refresh only\n                -- previously proven charge-bearing items in this bank bag.\n                BankFrame:RefreshKnownChargeOverlays(arg1)\n\n                -- Debug: count items in this bank bag via raw API\n'''
+          if old not in t:
+              raise SystemExit('bank bag BAG_UPDATE block not found')
+          t = t.replace(old, new, 1)
+
+          old = '''        elseif event == "PLAYERBANKBAGSLOTS_CHANGED" then\n            -- Bank container slot changed (bag added/removed)\n            -- Clear bag scanner cache since structure changed\n            -- NOTE: Don't clear ItemDetection cache - item properties don't change\n            addon.Modules.BankScanner:ClearCache()\n'''
+          new = '''        elseif event == "PLAYERBANKBAGSLOTS_CHANGED" then\n            -- Bank container slot changed (bag added/removed). Slot identities may\n            -- be remapped, so discard charge slot state as well.\n            if addon.Modules.ItemDetection and addon.Modules.ItemDetection.InvalidateCharges then\n                addon.Modules.ItemDetection:InvalidateCharges(nil)\n            end\n            addon.Modules.BankScanner:ClearCache()\n'''
+          if old not in t:
+              raise SystemExit('bank bag structure block not found')
+          t = t.replace(old, new, 1)
+          p.write_text(t, encoding='utf-8')
+
+          Path('.github/workflows/fix-charge-refresh.yml').unlink()
+
+      - name: Validate Lua and TOC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+          set -e
+          find . -name '*.lua' -print0 | while IFS= read -r -d '' f; do
+            luac5.1 -p "$f"
+          done
+          python - <<'PY'
+          from pathlib import Path
+          toc = Path('Guda.toc')
+          missing = []
+          for raw in toc.read_text(encoding='utf-8').splitlines():
+              line = raw.strip()
+              if not line or line.startswith('##'):
+                  continue
+              path = Path(line.replace('\\', '/'))
+              if not path.exists():
+                  missing.append(line)
+          if missing:
+              raise SystemExit('Missing TOC files: ' + ', '.join(missing))
+          print('Lua parse + TOC validation OK')
+          PY
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: refresh live item charges in bags and bank"
+          git push origin HEAD:refactor/consolidate-patch-layers
