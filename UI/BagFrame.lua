@@ -4324,24 +4324,49 @@ function BagFrame:Initialize()
 
  -- Update on bag changes (debounced to prevent lag on rapid bag updates)
  -- Register directly to access arg1 (bagID that changed) for incremental cache updates
+ local pendingChargeBags = {}
  local bagUpdateFrame = CreateFrame("Frame")
  bagUpdateFrame:RegisterEvent("BAG_UPDATE")
+ bagUpdateFrame:RegisterEvent("BAG_UPDATE_DELAYED")
  bagUpdateFrame:SetScript("OnEvent", function()
-     if currentViewChar then return end
-     if not Guda_BagFrame:IsShown() then return end
+     -- ClassicAPI fires BAG_UPDATE_DELAYED at the tail of the world tick, after
+     -- all BAG_UPDATE events for that frame and after bag contents have settled.
+     -- This is the correct point to rescan instance-only data such as charges.
+     if event == "BAG_UPDATE_DELAYED" then
+         if not currentViewChar and Guda_BagFrame:IsShown() then
+             for pendingBagID in pairs(pendingChargeBags) do
+                 pendingChargeBags[pendingBagID] = nil
+                 BagFrame:RefreshKnownChargeOverlays(pendingBagID)
+             end
+         else
+             -- The positive charge cache was already invalidated on BAG_UPDATE.
+             -- If bags are hidden, a future render will therefore read fresh data.
+             for pendingBagID in pairs(pendingChargeBags) do
+                 pendingChargeBags[pendingBagID] = nil
+             end
+         end
+         return
+     end
 
-     -- Only handle player bags (0-4) - use tonumber for safe comparison
+     -- Only handle player bags (0-4) - use tonumber for safe comparison.
      local bagID = tonumber(arg1)
      if not bagID or bagID < 0 or bagID > 4 then
          return  -- Skip bank bags (5-10) and invalid bags
      end
 
+     -- BAG_UPDATE itself can arrive before the new charge count is readable.
+     -- Invalidate now, remember the changed bag, but defer tooltip work until
+     -- BAG_UPDATE_DELAYED. Normal stacks keep their cached negative result.
+     if addon.Modules.ItemDetection and addon.Modules.ItemDetection.InvalidateCharges then
+         addon.Modules.ItemDetection:InvalidateCharges(bagID)
+     end
+     pendingChargeBags[bagID] = true
+
+     if currentViewChar then return end
+     if not Guda_BagFrame:IsShown() then return end
+
      local viewType = addon.Modules.DB:GetSetting("bagViewType") or "single"
      addon:DebugCategory("BAG_UPDATE (BagFrame): bagID=%d, viewType=%s", bagID, viewType)
-
-     -- A charge use can fire BAG_UPDATE without changing item link or stack count.
-     -- Refresh only already-known charge overlays before the incremental diff path.
-     BagFrame:RefreshKnownChargeOverlays(bagID)
 
      -- Check if sorting is in progress - use full redraw with throttle
      local isSorting = addon.Modules.SortEngine and addon.Modules.SortEngine.sortingInProgress
