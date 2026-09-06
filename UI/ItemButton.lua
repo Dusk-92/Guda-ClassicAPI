@@ -2501,16 +2501,6 @@ function Guda_ItemButton_OnEnter(self)
             end
         end
 
-        -- Add Inventory counts for mailbox items at the very bottom
-        if addon.Modules.Tooltip and addon.Modules.Tooltip.AddInventoryInfo then
-            local link = self.itemData and (self.itemData.link or (self.itemData.itemID and ("item:" .. self.itemData.itemID .. ":0:0:0")))
-            if not link and self.mailIndex and isMailboxOpen then
-                link = addon.Modules.Utils:GetInboxItemLink(self.mailIndex, self.mailItemIndex or 1)
-            end
-            if link then
-                addon.Modules.Tooltip:AddInventoryInfo(GameTooltip, link)
-            end
-        end
         
         GameTooltip:Show()
         return
