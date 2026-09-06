@@ -2,7 +2,7 @@
 ## Title: Guda ClassicAPI
 ## Notes: All-in-one bag and bank addon for World of Warcraft 1.12.1 (Turtle WoW), optimized for ClassicAPI
 ## Author: Vati; ClassicAPI fork by Dusk-92
-## Version: 2.3.4-classicapi
+## Version: 2.3.3-classicapi
 ## SavedVariables: Guda_DB
 ## SavedVariablesPerCharacter: Guda_CharDB
 ## OptionalDeps: pfUI
