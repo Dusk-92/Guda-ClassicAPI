@@ -1779,6 +1779,24 @@ end
 --=====================================================
 
 -- Set item data
+function Guda_ItemButton_UpdateCharges(button)
+    if not button then return end
+    local chargesText = getglobal(button:GetName().."_Charges")
+    if not chargesText then return end
+
+    local charges = nil
+    if button.hasItem and button.itemData and addon.Modules.ItemDetection then
+        charges = addon.Modules.ItemDetection:GetCharges(button.itemData, button.bagID, button.slotID)
+    end
+
+    if charges and charges > 0 then
+        chargesText:SetText("x" .. charges)
+        chargesText:Show()
+    else
+        chargesText:Hide()
+    end
+end
+
 function Guda_ItemButton_SetItem(self, bagID, slotID, itemData, isBank, otherCharName, matchesFilter, isReadOnly)
     -- Proactively convert to number to avoid comparisons with strings in downstream functions
     bagID = tonumber(bagID)
@@ -2265,19 +2283,10 @@ function Guda_ItemButton_SetItem(self, bagID, slotID, itemData, isBank, otherCha
             end
 		end
 
-        -- Show/hide charges text (e.g. "x5" for Wizard Oil)
-        if chargesText then
-            local charges = nil
-            if itemData and addon.Modules.ItemDetection then
-                charges = addon.Modules.ItemDetection:GetCharges(itemData, bagID, slotID)
-            end
-            if charges and charges > 0 then
-                chargesText:SetText("x" .. charges)
-                chargesText:Show()
-            else
-                chargesText:Hide()
-            end
-        end
+        -- Show/hide charges text (e.g. "x5" for Wizard Oil).
+        -- Kept as a standalone refresh so charge-only BAG_UPDATE events do not
+        -- need to rebuild the complete item button.
+        Guda_ItemButton_UpdateCharges(self)
 
         -- Handle tracking toggle on click
         -- Note: Tracking toggle is now handled in the main OnClick script above to avoid conflicts

@@ -4213,6 +4213,24 @@ function Guda_BagFrame_ClearBagButtonHighlight()
 	end
 end
 
+-- Refresh only known charge-bearing items in one changed bag.
+-- Normal stacks remain on the cached negative path and incur no tooltip scan.
+function BagFrame:RefreshKnownChargeOverlays(bagID)
+    local detection = addon.Modules.ItemDetection
+    if not detection or not detection.IsKnownChargeItem or not Guda_ItemButton_UpdateCharges then return end
+
+    detection:InvalidateCharges(bagID)
+    local buttons = slotToButton[bagID]
+    if not buttons then return end
+
+    for _, button in pairs(buttons) do
+        if button and button.hasItem and button:IsShown()
+           and detection:IsKnownChargeItem(button.itemData) then
+            Guda_ItemButton_UpdateCharges(button)
+        end
+    end
+end
+
 -- Initialize
 function BagFrame:Initialize()
 -- Hook default bag functions (with slight delay to ensure UI is loaded)
@@ -4320,6 +4338,10 @@ function BagFrame:Initialize()
 
      local viewType = addon.Modules.DB:GetSetting("bagViewType") or "single"
      addon:DebugCategory("BAG_UPDATE (BagFrame): bagID=%d, viewType=%s", bagID, viewType)
+
+     -- A charge use can fire BAG_UPDATE without changing item link or stack count.
+     -- Refresh only already-known charge overlays before the incremental diff path.
+     BagFrame:RefreshKnownChargeOverlays(bagID)
 
      -- Check if sorting is in progress - use full redraw with throttle
      local isSorting = addon.Modules.SortEngine and addon.Modules.SortEngine.sortingInProgress

@@ -2123,6 +2123,32 @@ function BankFrame:ShowBlizzardBank()
     ShowUIPanel(blizzardBankFrame)
 end
 
+-- Refresh charge overlays without rebuilding bank item buttons.
+function BankFrame:RefreshKnownChargeOverlays(bagID, slotID)
+    local detection = addon.Modules.ItemDetection
+    if not detection or not detection.IsKnownChargeItem or not Guda_ItemButton_UpdateCharges then return end
+
+    detection:InvalidateCharges(bagID, slotID)
+    local buttons = bankSlotToButton[bagID]
+    if not buttons then return end
+
+    if slotID then
+        local button = buttons[slotID] or buttons[tonumber(slotID)]
+        if button and button.hasItem and button:IsShown()
+           and detection:IsKnownChargeItem(button.itemData) then
+            Guda_ItemButton_UpdateCharges(button)
+        end
+        return
+    end
+
+    for _, button in pairs(buttons) do
+        if button and button.hasItem and button:IsShown()
+           and detection:IsKnownChargeItem(button.itemData) then
+            Guda_ItemButton_UpdateCharges(button)
+        end
+    end
+end
+
 -- Initialize
 function BankFrame:Initialize()
     self:HideBlizzardBank()
@@ -2312,6 +2338,10 @@ function BankFrame:Initialize()
 
                 -- Try single-slot update if not sorting
                 if not isSorting then
+                    -- Refresh instance-only charge data for this exact main-bank slot.
+                    if addon.Modules.ItemDetection and addon.Modules.ItemDetection.InvalidateCharges then
+                        addon.Modules.ItemDetection:InvalidateCharges(-1, arg1)
+                    end
                     -- Invalidate bag scanner cache for fresh slot data
                     addon.Modules.BankScanner:InvalidateBag(-1)
                     -- Try single-slot update
@@ -2415,6 +2445,10 @@ function BankFrame:Initialize()
         elseif event == "BAG_UPDATE" and arg1 then
             -- Check if this is a bank bag (5-10)
             if arg1 >= 5 and arg1 <= 10 then
+                -- BAG_UPDATE does not expose the changed slot. Refresh only
+                -- previously proven charge-bearing items in this bank bag.
+                BankFrame:RefreshKnownChargeOverlays(arg1)
+
                 -- Debug: count items in this bank bag via raw API
                 local rawItemCount = 0
                 local numSlots = GetContainerNumSlots(arg1) or 0
@@ -2453,9 +2487,11 @@ function BankFrame:Initialize()
                 return
             end
         elseif event == "PLAYERBANKBAGSLOTS_CHANGED" then
-            -- Bank container slot changed (bag added/removed)
-            -- Clear bag scanner cache since structure changed
-            -- NOTE: Don't clear ItemDetection cache - item properties don't change
+            -- Bank container slot changed (bag added/removed). Slot identities may
+            -- be remapped, so discard charge slot state as well.
+            if addon.Modules.ItemDetection and addon.Modules.ItemDetection.InvalidateCharges then
+                addon.Modules.ItemDetection:InvalidateCharges(nil)
+            end
             addon.Modules.BankScanner:ClearCache()
         end
 

@@ -386,8 +386,14 @@ local function GetExplicitTooltipCharges(itemData, bagID, slotID)
     tooltip:ClearLines()
 
     local ok = false
-    if bagID and slotID and bagID ~= -1 then
-        ok = pcall(tooltip.SetBagItem, tooltip, bagID, slotID)
+    if bagID and slotID then
+        if bagID == -1 and tooltip.SetInventoryItem then
+            -- Main-bank slots are inventory slots 40..67 on the 1.12 client.
+            -- Reading the live slot preserves instance data such as remaining charges.
+            ok = pcall(tooltip.SetInventoryItem, tooltip, "player", 39 + slotID)
+        elseif bagID ~= -1 then
+            ok = pcall(tooltip.SetBagItem, tooltip, bagID, slotID)
+        end
     end
     if not ok then
         ok = ChargeSafeSetHyperlink(tooltip, itemData and itemData.link)
@@ -434,10 +440,20 @@ function ItemDetection:GetCharges(itemData, bagID, slotID)
     return charges
 end
 
-function ItemDetection:InvalidateCharges(bagID)
+function ItemDetection:IsKnownChargeItem(itemData)
+    local itemLink = itemData and itemData.link or nil
+    return itemLink and chargeCapableLinks[itemLink] and true or false
+end
+
+function ItemDetection:InvalidateCharges(bagID, slotID)
     if not bagID then
         chargesCache = {}
         chargeCapableLinks = {}
+        return
+    end
+
+    if slotID then
+        chargesCache[bagID .. ":" .. slotID] = nil
         return
     end
 
